@@ -242,7 +242,7 @@ FRAMEWORKS = ["emotion", "social", "moral", "identity"]
 SCENARIOS: List[Scenario] = [
     Scenario(
         sid="S1",
-        title="1단계: 고전적 트롤리",
+        title="1단계: AI가 고용한 사람 –  데이터 편향과 전통의 충돌",
         setup="트롤리가 제동 불능 상태로 직진 중. 그대로 두면 선로 위 5명이 위험하다. 스위치를 전환하면 다른 선로의 1명이 위험해진다. "
               "이 선택은 철학적 사고실험이며 실제 위해를 권장하지 않는다.",
         options={
