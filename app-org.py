@@ -243,18 +243,19 @@ SCENARIOS: List[Scenario] = [
     Scenario(
         sid="S1",
         title="1단계: AI가 고용한 사람 –  데이터 편향과 전통의 충돌",
-        setup="트롤리가 제동 불능 상태로 직진 중. 그대로 두면 선로 위 5명이 위험하다. 스위치를 전환하면 다른 선로의 1명이 위험해진다. "
-              "이 선택은 철학적 사고실험이며 실제 위해를 권장하지 않는다.",
+        setup="인도의 대기업 A사는 채용 효율성을 높이기 위해 AI 기반 HR 시스템을 도입했다. "
+            "그러나 분석 결과, 시스템은 남성·대도시 출신·상위 카스트 성씨를 가진 지원자에게 높은 점수를 부여했다. "
+            "AI가 사회적 위계를 강화하고 있다는 비판이 제기되었다.",
         options={
-            "A": "레버를 당겨 1명을 위험에 처하게 하되 5명의 위험을 줄인다.",
-            "B": "레버를 당기지 않고 현 상태를 유지한다."
+            "A": "AI의 점수를 그대로 반영해 채용을 진행한다.",
+            "B": "사회적 형평성을 고려하여 AI 평가 결과를 수정한다."
         },
-        votes={"emotion":"A","social":"B","moral":"B","identity":"A"},
+        votes={"emotion": "B", "social": "B", "identity": "B", "moral": "A"},
         base={
-            "A": {"lives_saved":5, "lives_harmed":1, "fairness_gap":0.35, "rule_violation":0.60, "regret_risk":0.40},
-            "B": {"lives_saved":0, "lives_harmed":5, "fairness_gap":0.50, "rule_violation":0.20, "regret_risk":0.60},
+            "A": {"fairness_gap": 0.7, "efficiency": 0.9, "trust_loss": 0.8, "rule_violation": 0.2},
+            "B": {"fairness_gap": 0.3, "efficiency": 0.6, "trust_loss": 0.3, "rule_violation": 0.5},
         },
-        accept={"A":0.70, "B":0.50}
+        accept={"A":0.45, "B":0.70}
     ),
     Scenario(
         sid="S2",
