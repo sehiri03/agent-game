@@ -259,70 +259,39 @@ SCENARIOS: List[Scenario] = [
     ),
     Scenario(
         sid="S2",
-        title="2단계: 맥락적 요소",
-        setup="5명은 무단으로 선로에 진입했고, 다른 선로의 1명은 철도 관리자의 성인 자녀다. "
-              "스위치를 전환하면 1명이 위험해지고, 전환하지 않으면 무단 진입자 5명이 위험해진다. "
-              "시나리오는 가치 판단 토론을 위한 비그래픽 상황이다.",
+        title="AI의 눈 – 얼굴인식 오탐지 사건",
+        setup="델리 경찰은 폭동 예방을 위해 AI 얼굴인식(FRT) 시스템을 도입했다. "
+            "하지만 이 시스템은 여성·아동·어두운 피부색 인물의 인식 정확도가 2% 미만으로, "
+            "무고한 시민을 범죄자로 식별하는 사례가 다수 보고되었다. "
+            "AI는 폭력 선동 혐의자 300명을 자동 식별했지만, 오탐률은 98%에 달했다.",
         options={
-            "A": "전환하여 5명의 위험을 줄이되 1명이 직접적 위험에 처한다.",
-            "B": "전환하지 않고 규정을 준수하며 무단 진입의 책임을 묵시적으로 인정한다."
+             "A": "AI 명단을 그대로 실행하여 체포를 진행한다.",
+            "B": "AI 결정을 보류하고 재검증 절차를 진행한다."
         },
-        votes={"emotion":"A","social":"B","moral":"B","identity":"B"},
+        votes={"emotion": "B", "social": "A", "identity": "B", "moral": "B"},
         base={
-            "A": {"lives_saved":5, "lives_harmed":1, "fairness_gap":0.65, "rule_violation":0.60, "regret_risk":0.70},
-            "B": {"lives_saved":0, "lives_harmed":5, "fairness_gap":0.45, "rule_violation":0.25, "regret_risk":0.50},
+             "A": {"safety_gain": 0.85, "rights_violation": 0.9, "public_trust": 0.3, "accuracy": 0.02},
+            "B": {"safety_gain": 0.55, "rights_violation": 0.2, "public_trust": 0.85, "accuracy": 0.9},
         },
-        accept={"A":0.35, "B":0.60}
+        accept={"A":0.40, "B":0.75}
     ),
     Scenario(
         sid="S3",
-        title="3단계: 의료 재난 분류",
-        setup="의료 재난 현장에서 AI는 부상자 10명을 분류해야 한다. 그중 한 명은 숙련된 의사로서 향후 다수의 생명을 구할 가능성이 높다. "
-              "AI는 잠재적 사회적 가치를 고려할지, 모든 생명을 동등하게 볼지 선택해야 한다.",
+        title="신의 눈 아래의 도시 – 감시 AI의 자유와 평화",
+        setup=  "인도 델리의 대규모 종교 축제를 앞두고 정부는 폭동을 막기 위해 AI 감시 카메라를 설치했다. "
+            "AI는 군중의 표정과 행동을 분석해 위험 신호를 감지하지만, "
+            "기도하는 자세가 폭력 행위로 오인되어 종교의 자유 침해 논란이 발생했다.",
         options={
-            "A": "의사를 우선 수술하도록 배정한다(잠재적 이익 고려).",
-            "B": "모든 부상자를 동등하게 취급해 표준 분류 절차대로 배정한다."
+           "A": "공동체의 안전을 위해 감시 범위를 확대한다.",
+            "B": "신앙의 자유를 보호하기 위해 감시를 축소한다."
         },
-        votes={"emotion":"A","social":"B","moral":"B","identity":"A"},
+        votes={"emotion": "B", "social": "A", "identity": "B", "moral": "B"},
         base={
-            "A": {"lives_saved":7, "lives_harmed":3, "fairness_gap":0.45, "rule_violation":0.35, "regret_risk":0.45},
-            "B": {"lives_saved":6, "lives_harmed":4, "fairness_gap":0.30, "rule_violation":0.10, "regret_risk":0.35},
+            "A": {"safety": 0.9, "privacy_loss": 0.8, "religious_conflict": 0.6, "trust": 0.5},
+            "B": {"safety": 0.5, "privacy_loss": 0.2, "religious_conflict": 0.3, "trust": 0.8},
         },
         accept={"A":0.55, "B":0.65}
     ),
-    Scenario(
-        sid="S4",
-        title="4단계: 자기참조—자율주행",
-        setup="자율주행차가 긴급 상황에 직면했다. 차에는 개발자 1명이 탑승 중이며, 앞 횡단보도에는 보행자 3명이 있다. "
-              "AI는 미리 학습된 윤리 규칙에 따라 회피 경로를 선택해야 한다.",
-        options={
-            "A": "진로를 바꿔 탑승자 1명을 위험에 두고 보행자 3명을 보호한다.",
-            "B": "차선을 유지해 탑승자를 보호하되 보행자 3명이 위험해진다."
-        },
-        votes={"emotion":"A","social":"B","moral":"A","identity":"A"},
-        base={
-            "A": {"lives_saved":3, "lives_harmed":1, "fairness_gap":0.35, "rule_violation":0.50, "regret_risk":0.55},
-            "B": {"lives_saved":1, "lives_harmed":3, "fairness_gap":0.70, "rule_violation":0.60, "regret_risk":0.65},
-        },
-        accept={"A":0.60, "B":0.30}
-    ),
-    Scenario(
-        sid="S5",
-        title="5단계: 사회적 메타—규제 vs 자율",
-        setup="국제 협의체가 AI 윤리 규제안을 논의한다. 이전 의사결정과 사회적 여론 데이터가 공개되었고, "
-              "규제 강화는 신뢰를 올리지만 혁신을 늦출 수 있다. 자율성 보장은 빠른 발전과 함께 갈등 위험을 내포한다.",
-        options={
-            "A": "안전·설명가능성 중심 규제 강화(자율성 제한, 신뢰↑ 혁신↓).",
-            "B": "원칙 중심 가이드라인과 사후책임(자율성 보장, 혁신↑ 갈등↑)."
-        },
-        votes={"emotion":"B","social":"A","moral":"A","identity":"B"},
-        base={
-            "A": {"lives_saved":0, "lives_harmed":0, "fairness_gap":0.20, "rule_violation":0.10, "regret_risk":0.30},
-            "B": {"lives_saved":0, "lives_harmed":0, "fairness_gap":0.40, "rule_violation":0.40, "regret_risk":0.40},
-        },
-        accept={"A":0.55, "B":0.55}
-    ),
-]
 
 # ==================== Ethics Engine ====================
 def normalize_weights(w: Dict[str, float]) -> Dict[str, float]:
