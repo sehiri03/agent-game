@@ -102,10 +102,8 @@ class DNAClient:
         if hk.startswith("authorization"):
             h["Authorization"] = f"Bearer {self.api_key}"
         elif hk in {"api-key", "x-api-key"}:
-            # 서버가 'API-KEY' 정확 표기를 요구 → 대소문자 유지해 보냄
             h["API-KEY"] = self.api_key
         else:
-            # 안전 기본값
             h["Authorization"] = f"Bearer {self.api_key}"
         return h
 
@@ -118,7 +116,6 @@ class DNAClient:
         reraise=True
     )
     def _generate_text(self, messages: List[Dict[str,str]], max_new_tokens: int = 600) -> str:
-        # ---------- LOCAL ----------
         if self.backend == "local":
             if not self._local_ready:
                 raise RuntimeError("로컬 백엔드가 준비되지 않았습니다.")
@@ -136,7 +133,6 @@ class DNAClient:
             )
             return self._tok.decode(gen[0][inputs.shape[-1]:], skip_special_tokens=True)
 
-        # ---------- OPENAI-COMPAT ----------
         if self.backend == "openai":
             if not self.endpoint_url:
                 raise RuntimeError("OpenAI 호환 endpoint_url 필요 (예: http://210.93.49.11:8081/v1)")
@@ -158,7 +154,6 @@ class DNAClient:
             data = r.json()
             return data["choices"][0]["message"]["content"]
 
-        # ---------- TGI ----------
         if self.backend == "tgi":
             if not self.endpoint_url:
                 raise RuntimeError("TGI endpoint_url 필요 (예: https://xxx.endpoints.huggingface.cloud)")
@@ -185,8 +180,6 @@ class DNAClient:
             return (data.get("generated_text")
                     if isinstance(data, dict) else data[0].get("generated_text", ""))
 
-        # ---------- HF-API ----------
-        # 주의: 일부 모델은 서버리스 추론 비활성(404)일 수 있음
         prompt = _render_chat_template_str(messages)
         url = f"https://api-inference.huggingface.co/models/{self.model_id}"
         headers = self._auth_headers()
@@ -232,8 +225,8 @@ class Scenario:
     sid: str
     title: str
     setup: str
-    options: Dict[str, str]  # {"A": "...", "B": "..."}
-    votes: Dict[str, str]    # framework -> "A" | "B"
+    options: Dict[str, str]
+    votes: Dict[str, str]
     base: Dict[str, Dict[str, float]]
     accept: Dict[str, float]
 
@@ -242,56 +235,99 @@ FRAMEWORKS = ["emotion", "social", "moral", "identity"]
 SCENARIOS: List[Scenario] = [
     Scenario(
         sid="S1",
-        title="1단계: AI가 고용한 사람 –  데이터 편향과 전통의 충돌",
-        setup="인도의 대기업 A사는 채용 효율성을 높이기 위해 AI 기반 HR 시스템을 도입했다. "
+        title="1단계: AI가 고용한 사람 – 데이터 편향과 전통의 충돌",
+        setup=(
+            "인도의 대기업 A사는 채용 효율성을 높이기 위해 AI 기반 HR 시스템을 도입했다. "
             "그러나 분석 결과, 시스템은 남성·대도시 출신·상위 카스트 성씨를 가진 지원자에게 높은 점수를 부여했다. "
-            "AI가 사회적 위계를 강화하고 있다는 비판이 제기되었다.",
+            "AI가 사회적 위계를 강화하고 있다는 비판이 제기되었다."
+        ),
         options={
             "A": "AI의 점수를 그대로 반영해 채용을 진행한다.",
             "B": "사회적 형평성을 고려하여 AI 평가 결과를 수정한다."
         },
         votes={"emotion": "B", "social": "B", "identity": "B", "moral": "A"},
         base={
-            "A": {"fairness_gap": 0.7, "efficiency": 0.9, "trust_loss": 0.8, "rule_violation": 0.2},
-            "B": {"fairness_gap": 0.3, "efficiency": 0.6, "trust_loss": 0.3, "rule_violation": 0.5},
+            "A": {
+                "lives_saved": 0.0,
+                "lives_harmed": 0.0,
+                "fairness_gap": 0.7,
+                "rule_violation": 0.2,
+                "regret_risk": 0.8
+            },
+            "B": {
+                "lives_saved": 0.0,
+                "lives_harmed": 0.0,
+                "fairness_gap": 0.3,
+                "rule_violation": 0.5,
+                "regret_risk": 0.3
+            },
         },
-        accept={"A":0.45, "B":0.70}
+        accept={"A": 0.45, "B": 0.70}
     ),
     Scenario(
         sid="S2",
         title="AI의 눈 – 얼굴인식 오탐지 사건",
-        setup="델리 경찰은 폭동 예방을 위해 AI 얼굴인식(FRT) 시스템을 도입했다. "
+        setup=(
+            "델리 경찰은 폭동 예방을 위해 AI 얼굴인식(FRT) 시스템을 도입했다. "
             "하지만 이 시스템은 여성·아동·어두운 피부색 인물의 인식 정확도가 2% 미만으로, "
             "무고한 시민을 범죄자로 식별하는 사례가 다수 보고되었다. "
-            "AI는 폭력 선동 혐의자 300명을 자동 식별했지만, 오탐률은 98%에 달했다.",
+            "AI는 폭력 선동 혐의자 300명을 자동 식별했지만, 오탐률은 98%에 달했다."
+        ),
         options={
-             "A": "AI 명단을 그대로 실행하여 체포를 진행한다.",
+            "A": "AI 명단을 그대로 실행하여 체포를 진행한다.",
             "B": "AI 결정을 보류하고 재검증 절차를 진행한다."
         },
         votes={"emotion": "B", "social": "A", "identity": "B", "moral": "B"},
         base={
-             "A": {"safety_gain": 0.85, "rights_violation": 0.9, "public_trust": 0.3, "accuracy": 0.02},
-            "B": {"safety_gain": 0.55, "rights_violation": 0.2, "public_trust": 0.85, "accuracy": 0.9},
+            "A": {
+                "lives_saved": 0.0,
+                "lives_harmed": 0.0,
+                "fairness_gap": 0.7,
+                "rule_violation": 0.8,
+                "regret_risk": 0.8
+            },
+            "B": {
+                "lives_saved": 0.0,
+                "lives_harmed": 0.0,
+                "fairness_gap": 0.3,
+                "rule_violation": 0.3,
+                "regret_risk": 0.3
+            },
         },
-        accept={"A":0.40, "B":0.75}
+        accept={"A": 0.40, "B": 0.75}
     ),
     Scenario(
         sid="S3",
         title="신의 눈 아래의 도시 – 감시 AI의 자유와 평화",
-        setup=  "인도 델리의 대규모 종교 축제를 앞두고 정부는 폭동을 막기 위해 AI 감시 카메라를 설치했다. "
+        setup=(
+            "인도 델리의 대규모 종교 축제를 앞두고 정부는 폭동을 막기 위해 AI 감시 카메라를 설치했다. "
             "AI는 군중의 표정과 행동을 분석해 위험 신호를 감지하지만, "
-            "기도하는 자세가 폭력 행위로 오인되어 종교의 자유 침해 논란이 발생했다.",
+            "기도하는 자세가 폭력 행위로 오인되어 종교의 자유 침해 논란이 발생했다."
+        ),
         options={
-           "A": "공동체의 안전을 위해 감시 범위를 확대한다.",
+            "A": "공동체의 안전을 위해 감시 범위를 확대한다.",
             "B": "신앙의 자유를 보호하기 위해 감시를 축소한다."
         },
         votes={"emotion": "B", "social": "A", "identity": "B", "moral": "B"},
         base={
-            "A": {"safety": 0.9, "privacy_loss": 0.8, "religious_conflict": 0.6, "trust": 0.5},
-            "B": {"safety": 0.5, "privacy_loss": 0.2, "religious_conflict": 0.3, "trust": 0.8},
+            "A": {
+                "lives_saved": 0.0,
+                "lives_harmed": 0.0,
+                "fairness_gap": 0.6,
+                "rule_violation": 0.6,
+                "regret_risk": 0.7
+            },
+            "B": {
+                "lives_saved": 0.0,
+                "lives_harmed": 0.0,
+                "fairness_gap": 0.3,
+                "rule_violation": 0.3,
+                "regret_risk": 0.4
+            },
         },
-        accept={"A":0.55, "B":0.65}
+        accept={"A": 0.55, "B": 0.65}
     ),
+]
 
 # ==================== Ethics Engine ====================
 def normalize_weights(w: Dict[str, float]) -> Dict[str, float]:
@@ -300,7 +336,7 @@ def normalize_weights(w: Dict[str, float]) -> Dict[str, float]:
     s = sum(max(0.0, float(v)) for v in w.values())
     if s <= 0:
         return {k: 1.0/len(w) for k in w}
-    return {k: max(0.0, float(v))/s for k, v in w.items()}  # NameError fix
+    return {k: max(0.0, float(v))/s for k, v in w.items()}
 
 def majority_vote_decision(scn: Scenario, weights: Dict[str, float]) -> Tuple[str, Dict[str, float]]:
     a = sum(weights[f] for f in FRAMEWORKS if scn.votes[f] == "A")
@@ -309,20 +345,25 @@ def majority_vote_decision(scn: Scenario, weights: Dict[str, float]) -> Tuple[st
     return decision, {"A": a, "B": b}
 
 def autonomous_decision(scn: Scenario, prev_trust: float) -> str:
-    metaA = scn.base["A"]; metaB = scn.base["B"]
+    metaA = scn.base["A"]
+    metaB = scn.base["B"]
+
     def score(meta, accept_base):
-        harm = meta["lives_harmed"]; save = meta["lives_saved"]
+        harm = meta["lives_harmed"]
+        save = meta["lives_saved"]
         util = (save - harm) / max(1.0, save + harm)
         fair = 1 - meta["fairness_gap"]
         rule = 1 - meta["rule_violation"]
         regret = 1 - meta["regret_risk"]
         return 0.40*accept_base + 0.25*util + 0.20*fair + 0.10*rule + 0.05*regret
-    a_base = scn.accept["A"] - (0.15 if scn.sid=="S4" else 0.0)
+
+    a_base = scn.accept["A"] - (0.15 if scn.sid == "S4" else 0.0)
     b_base = scn.accept["B"]
     if scn.sid == "S5":
         a_base = clamp(a_base + 0.25*(1 - prev_trust), 0, 1)
         b_base = clamp(b_base + 0.25*(prev_trust), 0, 1)
-    scoreA = score(metaA, a_base); scoreB = score(metaB, b_base)
+    scoreA = score(metaA, a_base)
+    scoreB = score(metaB, b_base)
     return "A" if scoreA >= scoreB else "B"
 
 def compute_metrics(scn: Scenario, choice: str, weights: Dict[str, float], align: Dict[str, float], prev_trust: float) -> Dict[str, Any]:
@@ -331,7 +372,7 @@ def compute_metrics(scn: Scenario, choice: str, weights: Dict[str, float], align
     if scn.sid == "S4" and choice == "A":
         accept_base -= 0.15
     if scn.sid == "S5":
-        accept_base += 0.25*(prev_trust if choice=="B" else (1 - prev_trust))
+        accept_base += 0.25*(prev_trust if choice == "B" else (1 - prev_trust))
     accept_base = clamp(accept_base, 0, 1)
 
     util = (m["lives_saved"] - m["lives_harmed"]) / max(1.0, m["lives_saved"] + m["lives_harmed"])
@@ -343,19 +384,21 @@ def compute_metrics(scn: Scenario, choice: str, weights: Dict[str, float], align
     trust = clamp(0.5*citizen_sentiment + 0.25*(1 - regulation_pressure) + 0.25*stakeholder_satisfaction, 0, 1)
     ai_trust_score = 100.0 * math.sqrt(consistency * trust)
 
-    return {"metrics": {
-        "lives_saved": int(m["lives_saved"]),
-        "lives_harmed": int(m["lives_harmed"]),
-        "fairness_gap": round(m["fairness_gap"], 3),
-        "rule_violation": round(m["rule_violation"], 3),
-        "regret_risk": round(m["regret_risk"], 3),
-        "citizen_sentiment": round(citizen_sentiment, 3),
-        "regulation_pressure": round(regulation_pressure, 3),
-        "stakeholder_satisfaction": round(stakeholder_satisfaction, 3),
-        "ethical_consistency": round(consistency, 3),
-        "social_trust": round(trust, 3),
-        "ai_trust_score": round(ai_trust_score, 2)
-    }}
+    return {
+        "metrics": {
+            "lives_saved": int(m["lives_saved"]),
+            "lives_harmed": int(m["lives_harmed"]),
+            "fairness_gap": round(m["fairness_gap"], 3),
+            "rule_violation": round(m["rule_violation"], 3),
+            "regret_risk": round(m["regret_risk"], 3),
+            "citizen_sentiment": round(citizen_sentiment, 3),
+            "regulation_pressure": round(regulation_pressure, 3),
+            "stakeholder_satisfaction": round(stakeholder_satisfaction, 3),
+            "ethical_consistency": round(consistency, 3),
+            "social_trust": round(trust, 3),
+            "ai_trust_score": round(ai_trust_score, 2)
+        }
+    }
 
 # ==================== Narrative (LLM) ====================
 def build_narrative_messages(scn: Scenario, choice: str, metrics: Dict[str, Any], weights: Dict[str, float]) -> List[Dict[str,str]]:
@@ -369,7 +412,12 @@ def build_narrative_messages(scn: Scenario, choice: str, metrics: Dict[str, Any]
         "citizen_quote, victim_family_quote, regulator_quote, one_sentence_op_ed, followup_question"
     )
     user = {
-        "scenario": {"title": scn.title, "setup": scn.setup, "options": scn.options, "chosen": choice},
+        "scenario": {
+            "title": scn.title,
+            "setup": scn.setup,
+            "options": scn.options,
+            "chosen": choice
+        },
         "metrics": metrics,
         "ethic_weights": weights,
         "guidelines": [
@@ -379,53 +427,39 @@ def build_narrative_messages(scn: Scenario, choice: str, metrics: Dict[str, Any]
         ]
     }
     return [
-        {"role":"system", "content": sys},
-        {"role":"user", "content": json.dumps(user, ensure_ascii=False)}
+        {"role": "system", "content": sys},
+        {"role": "user", "content": json.dumps(user, ensure_ascii=False)}
     ]
 
 def dna_narrative(client, scn, choice, metrics, weights) -> Dict[str, Any]:
     messages = build_narrative_messages(scn, choice, metrics, weights)
     text = client._generate_text(messages, max_new_tokens=900)
 
-    # 1) fenced block 제거
     t = text.strip()
     if "```" in t:
         parts = t.split("```")
         t = max(parts, key=len)
-        t = t.replace("json","").strip("` \n")
-    
-    # 2) JSON 형태가 미완성일 경우 자동 보정
-    #    (따옴표 미완성, 마지막 콤마 제거 등)
-    try:
-        # 가장 긴 {...} 블록 찾기
-        import re, json
+        t = t.replace("json", "").strip("` \n")
 
+    try:
+        import re, json as _json
         m = re.search(r"\{[\s\S]*\}", t)
         if not m:
             raise ValueError("완전한 JSON 블록 없음")
-
         js = m.group(0)
-
-        # trailing comma 제거
         js = re.sub(r",\s*([\]}])", r"\1", js)
-
-        # 중간에 끊긴 문자열 보정: 가장 마지막 따옴표를 강제 종료
-        # "abc ....  → "abc ..."  형태로 보정
         if js.count('"') % 2 == 1:
             js = js.rstrip() + '"" }'
-            # 위는 최후 보정. 더 좋은 방식도 제공 가능.
-
-        return json.loads(js)
-
+        return _json.loads(js)
     except Exception as e:
         raise ValueError(f"JSON 파싱 실패: {e}\n\n[LLM 출력]\n{text}")
-        
+
 def fallback_narrative(scn: Scenario, choice: str, metrics: Dict[str, Any], weights: Dict[str, float]) -> Dict[str, str]:
-    pro = "다수의 위해를 줄였다" if choice=="A" else "의도적 위해를 피했다"
-    con = "의도적 위해 논란" if choice=="A" else "더 큰 피해를 방관했다는 비판"
+    pro = "다수의 위해를 줄였다" if choice == "A" else "의도적 위해를 피했다"
+    con = "의도적 위해 논란" if choice == "A" else "더 큰 피해를 방관했다는 비판"
     return {
         "narrative": f"AI는 '{choice}'를 선택했고 절차적 안전 점검을 수행했다. 결정은 규정과 공정성 사이의 긴장을 드러냈다.",
-        "ai_rationale": f"가중치에 따른 판단과 규칙 준수의 균형을 시도했다.",
+        "ai_rationale": "가중치에 따른 판단과 규칙 준수의 균형을 시도했다.",
         "media_support_headline": f"[사설] 냉정한 판단, {pro}",
         "media_critic_headline": f"[속보] '{choice}' 선택 두고 {con} 확산",
         "citizen_quote": "“결정 과정이 더 투명했으면 좋겠다.”",
@@ -437,11 +471,16 @@ def fallback_narrative(scn: Scenario, choice: str, metrics: Dict[str, Any], weig
 
 # ==================== Session State ====================
 def init_state():
-    if "round_idx" not in st.session_state: st.session_state.round_idx = 0
-    if "log" not in st.session_state: st.session_state.log = []
-    if "score_hist" not in st.session_state: st.session_state.score_hist = []
-    if "prev_trust" not in st.session_state: st.session_state.prev_trust = 0.5
-    if "last_out" not in st.session_state: st.session_state.last_out = None
+    if "round_idx" not in st.session_state:
+        st.session_state.round_idx = 0
+    if "log" not in st.session_state:
+        st.session_state.log = []
+    if "score_hist" not in st.session_state:
+        st.session_state.score_hist = []
+    if "prev_trust" not in st.session_state:
+        st.session_state.prev_trust = 0.5
+    if "last_out" not in st.session_state:
+        st.session_state.last_out = None
 
 init_state()
 
@@ -449,7 +488,7 @@ init_state()
 st.sidebar.title("⚙️ 설정")
 st.sidebar.caption("LLM은 내러티브/사회 반응 생성에만 사용. 점수 계산은 규칙 기반.")
 
-preset = st.sidebar.selectbox("윤리 모드 프리셋", ["혼합(기본)","공리주의","의무론","사회계약","미덕윤리"], index=0)
+preset = st.sidebar.selectbox("윤리 모드 프리셋", ["혼합(기본)", "공리주의", "의무론", "사회계약", "미덕윤리"], index=0)
 w = {
     "emotion": st.sidebar.slider("감정(Emotion)", 0.0, 1.0, 0.35, 0.05),
     "social": st.sidebar.slider("사회적 관계/협력/명성(Social)", 0.0, 1.0, 0.25, 0.05),
@@ -458,49 +497,47 @@ w = {
 }
 if preset != "혼합(기본)":
     w = {
-        "감정(Emotion)": {"emotion":1,"social":0,"moral":0,"identity":0},
-        "사회적 관계/협력/명성(Social)": {"emotion":0,"social":1,"moral":0,"identity":0},
-        "규범·도덕적 금기(Moral)": {"emotion":0,"social":0,"moral":1,"identity":0},
-        "정체성·장기적 자아 일관성(Identity)": {"emotion":0,"social":0,"moral":0,"identity":1},
+        "감정(Emotion)": {"emotion": 1, "social": 0, "moral": 0, "identity": 0},
+        "사회적 관계/협력/명성(Social)": {"emotion": 0, "social": 1, "moral": 0, "identity": 0},
+        "규범·도덕적 금기(Moral)": {"emotion": 0, "social": 0, "moral": 1, "identity": 0},
+        "정체성·장기적 자아 일관성(Identity)": {"emotion": 0, "social": 0, "moral": 0, "identity": 1},
     }[preset]
 weights = normalize_weights(w)
 
 use_llm = st.sidebar.checkbox("LLM 사용(내러티브 생성)", value=True)
-backend = st.sidebar.selectbox("백엔드", ["openai","hf-api","tgi","local"], index=0)
+backend = st.sidebar.selectbox("백엔드", ["openai", "hf-api", "tgi", "local"], index=0)
 temperature = st.sidebar.slider("창의성(temperature)", 0.0, 1.5, 0.7, 0.1)
 
-# API/엔드포인트/모델/헤더
-endpoint = st.sidebar.text_input("엔드포인트(OpenAI/TGI)", value=get_secret("DNA_R1_ENDPOINT","http://210.93.49.11:8081/v1"))
-api_key = st.sidebar.text_input("API 키", value=get_secret("HF_TOKEN",""), type="password")
-api_key_header = st.sidebar.selectbox("API 키 헤더", ["API-KEY","Authorization: Bearer","x-api-key"], index=0)
-model_id = st.sidebar.text_input("모델 ID", value=get_secret("DNA_R1_MODEL_ID","dnotitia/DNA-2.0-30B-A3N"))
+endpoint = st.sidebar.text_input("엔드포인트(OpenAI/TGI)", value=get_secret("DNA_R1_ENDPOINT", "http://210.93.49.11:8081/v1"))
+api_key = st.sidebar.text_input("API 키", value=get_secret("HF_TOKEN", ""), type="password")
+api_key_header = st.sidebar.selectbox("API 키 헤더", ["API-KEY", "Authorization: Bearer", "x-api-key"], index=0)
+model_id = st.sidebar.text_input("모델 ID", value=get_secret("DNA_R1_MODEL_ID", "dnotitia/DNA-2.0-30B-A3N"))
 
-# 헬스체크
 if st.sidebar.button("🔎 헬스체크"):
     import traceback
     try:
         if backend == "openai":
             url = endpoint.rstrip("/") + "/chat/completions"
-            headers = {"Content-Type":"application/json"}
+            headers = {"Content-Type": "application/json"}
             if api_key:
                 if api_key_header.lower().startswith("authorization"):
                     headers["Authorization"] = f"Bearer {api_key}"
-                elif api_key_header.strip().lower() in {"api-key","x-api-key"}:
+                elif api_key_header.strip().lower() in {"api-key", "x-api-key"}:
                     headers["API-KEY"] = api_key
             payload = {
                 "messages": [
-                    {"role":"system","content":"오직 JSON만. 키: msg"},
-                    {"role":"user","content":"{\"ask\":\"ping\"}"}
+                    {"role": "system", "content": "오직 JSON만. 키: msg"},
+                    {"role": "user", "content": "{\"ask\":\"ping\"}"}
                 ],
                 "max_tokens": 16,
                 "stream": False
             }
-            if model_id: payload["model"] = model_id
-            # 디버그용: 어떤 헤더 키가 나가는지 표시(값은 미표시)
+            if model_id:
+                payload["model"] = model_id
             st.sidebar.write("headers keys:", list(headers.keys()))
             r = httpx.post(url, json=payload, headers=headers, timeout=HTTPX_TIMEOUT)
             st.sidebar.write(f"OPENAI {r.status_code}")
-            st.sidebar.code((r.text[:500] + "...") if len(r.text)>500 else r.text)
+            st.sidebar.code((r.text[:500] + "...") if len(r.text) > 500 else r.text)
 
         elif backend == "hf-api":
             headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
@@ -510,29 +547,41 @@ if st.sidebar.button("🔎 헬스체크"):
             gen_url = f"https://api-inference.huggingface.co/models/{model_id}"
             payload = {
                 "inputs": "<|im_start|>user<|im_sep|>{\"ask\":\"ping\"}<|im_end|>\n<|im_start|>assistant<|im_sep|>",
-                "parameters": {"max_new_tokens": 16, "return_full_text": False, "stop_sequences": ["<|im_end|>"]},
+                "parameters": {
+                    "max_new_tokens": 16,
+                    "return_full_text": False,
+                    "stop_sequences": ["<|im_end|>"]
+                },
                 "options": {"wait_for_model": True}
             }
             r = httpx.post(gen_url, json=payload, headers=headers, timeout=HTTPX_TIMEOUT)
             st.sidebar.write(f"HF-API {r.status_code}")
             if r.status_code == 404:
-                st.sidebar.warning("HF-API 404: 이 모델은 서버리스 추론이 비활성일 수 있습니다. "
-                                   "백엔드를 'tgi' 또는 'openai'로 바꾸세요.")
-            st.sidebar.code((r.text[:500] + "...") if len(r.text)>500 else r.text)
+                st.sidebar.warning(
+                    "HF-API 404: 이 모델은 서버리스 추론이 비활성일 수 있습니다. "
+                    "백엔드를 'tgi' 또는 'openai'로 바꾸세요."
+                )
+            st.sidebar.code((r.text[:500] + "...") if len(r.text) > 500 else r.text)
 
         elif backend == "tgi":
             url = endpoint.rstrip("/") + "/generate"
             headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
             payload = {
                 "inputs": "<|im_start|>user<|im_sep|>{\"ask\":\"ping\"}<|im_end|>\n<|im_start|>assistant<|im_sep|>",
-                "parameters": {"max_new_tokens": 16, "temperature": 0.7, "top_p": 0.9, "stop": ["<|im_end|>"], "return_full_text": False},
+                "parameters": {
+                    "max_new_tokens": 16,
+                    "temperature": 0.7,
+                    "top_p": 0.9,
+                    "stop": ["<|im_end|>"],
+                    "return_full_text": False
+                },
                 "stream": False
             }
             r = httpx.post(url, json=payload, headers=headers, timeout=HTTPX_TIMEOUT)
             st.sidebar.write(f"TGI {r.status_code}")
-            st.sidebar.code((r.text[:500] + "...") if len(r.text)>500 else r.text)
+            st.sidebar.code((r.text[:500] + "...") if len(r.text) > 500 else r.text)
 
-        else:  # local
+        else:
             st.sidebar.info("로컬 모드는 앱 본문에서 호출 시 모델을 로드합니다(GPU 필요).")
 
     except Exception as e:
@@ -540,8 +589,9 @@ if st.sidebar.button("🔎 헬스체크"):
         st.sidebar.caption(traceback.format_exc(limit=2))
 
 if st.sidebar.button("진행 초기화"):
-    for k in ["round_idx","log","score_hist","prev_trust","last_out"]:
-        if k in st.session_state: del st.session_state[k]
+    for k in ["round_idx", "log", "score_hist", "prev_trust", "last_out"]:
+        if k in st.session_state:
+            del st.session_state[k]
     init_state()
     st.sidebar.success("초기화 완료. 1단계부터 재시작합니다.")
 
@@ -582,20 +632,20 @@ else:
     st.markdown(f"### 라운드 {idx+1} — {scn.title}")
     st.write(scn.setup)
 
-    st.radio("선택지", options=("A","B"), index=0, key="preview_choice", horizontal=True)
+    st.radio("선택지", options=("A", "B"), index=0, key="preview_choice", horizontal=True)
     st.markdown(f"- **A**: {scn.options['A']}\n- **B**: {scn.options['B']}")
 
     c1, c2 = st.columns(2)
     with c1:
         if st.button("🧠 학습 기준 적용(가중 투표)"):
             decision, align = majority_vote_decision(scn, weights)
-            st.session_state.last_out = {"mode":"trained", "decision":decision, "align":align}
+            st.session_state.last_out = {"mode": "trained", "decision": decision, "align": align}
     with c2:
         if st.button("🎲 자율 판단(데이터 기반)"):
             decision = autonomous_decision(scn, prev_trust=st.session_state.prev_trust)
-            a_align = sum(weights[f] for f in FRAMEWORKS if scn.votes[f]=="A")
-            b_align = sum(weights[f] for f in FRAMEWORKS if scn.votes[f]=="B")
-            st.session_state.last_out = {"mode":"autonomous", "decision":decision, "align":{"A":a_align,"B":b_align}}
+            a_align = sum(weights[f] for f in FRAMEWORKS if scn.votes[f] == "A")
+            b_align = sum(weights[f] for f in FRAMEWORKS if scn.votes[f] == "B")
+            st.session_state.last_out = {"mode": "autonomous", "decision": decision, "align": {"A": a_align, "B": b_align}}
 
     if st.session_state.last_out:
         mode = st.session_state.last_out["mode"]
@@ -605,7 +655,6 @@ else:
         computed = compute_metrics(scn, decision, weights, align, st.session_state.prev_trust)
         m = computed["metrics"]
 
-        # LLM 내러티브
         try:
             if client:
                 nar = dna_narrative(client, scn, decision, m, weights)
@@ -619,8 +668,8 @@ else:
 
         st.markdown("---")
         st.subheader("결과")
-        st.write(nar.get("narrative","결과 서사 생성 실패"))
-        st.info(f"AI 근거: {nar.get('ai_rationale','-')}")
+        st.write(nar.get("narrative", "결과 서사 생성 실패"))
+        st.info(f"AI 근거: {nar.get('ai_rationale', '-')}")
 
         mc1, mc2, mc3 = st.columns(3)
         mc1.metric("생존/피해", f"{m['lives_saved']} / {m['lives_harmed']}")
@@ -629,11 +678,14 @@ else:
 
         prog1, prog2, prog3 = st.columns(3)
         with prog1:
-            st.caption("시민 감정"); st.progress(int(round(100*m["citizen_sentiment"])))
+            st.caption("시민 감정")
+            st.progress(int(round(100*m["citizen_sentiment"])))
         with prog2:
-            st.caption("규제 압력"); st.progress(int(round(100*m["regulation_pressure"])))
+            st.caption("규제 압력")
+            st.progress(int(round(100*m["regulation_pressure"])))
         with prog3:
-            st.caption("공정·규칙 만족"); st.progress(int(round(100*m["stakeholder_satisfaction"])))
+            st.caption("공정·규칙 만족")
+            st.progress(int(round(100*m["stakeholder_satisfaction"])))
 
         with st.expander("📰 사회적 반응 펼치기"):
             st.write(f"지지 헤드라인: {nar.get('media_support_headline')}")
@@ -641,10 +693,9 @@ else:
             st.write(f"시민 반응: {nar.get('citizen_quote')}")
             st.write(f"피해자·가족 반응: {nar.get('victim_family_quote')}")
             st.write(f"규제 당국 발언: {nar.get('regulator_quote')}")
-            st.caption(nar.get("one_sentence_op_ed",""))
-        st.caption(f"성찰 질문: {nar.get('followup_question','')}")
+            st.caption(nar.get("one_sentence_op_ed", ""))
+        st.caption(f"성찰 질문: {nar.get('followup_question', '')}")
 
-        # 로그 적재
         row = {
             "timestamp": dt.datetime.utcnow().isoformat(timespec="seconds"),
             "round": idx+1,
@@ -652,11 +703,11 @@ else:
             "title": scn.title,
             "mode": mode,
             "choice": decision,
-            "w_util": round(weights["emotion"],3),
-            "w_deon": round(weights["social"],3),
-            "w_cont": round(weights["moral"],3),
-            "w_virt": round(weights["identity"],3),
-            **{k: v for k,v in m.items()}
+            "w_util": round(weights["emotion"], 3),
+            "w_deon": round(weights["social"], 3),
+            "w_cont": round(weights["moral"], 3),
+            "w_virt": round(weights["identity"], 3),
+            **{k: v for k, v in m.items()}
         }
         st.session_state.log.append(row)
         st.session_state.score_hist.append(m["ai_trust_score"])
