@@ -2,13 +2,14 @@
 # author: Prof. Songhee Kang
 # AIM 2025, Fall. TU Korea
 
-import os, json, math, csv, io, datetime as dt, re, random
+import os, json, math, csv, io, datetime as dt, re
 from dataclasses import dataclass
 from typing import Dict, Any, List, Tuple, Optional
 
 import streamlit as st
 import httpx
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
+import random  # 🔹 랜덤 선택을 위해 추가
 
 # ==================== App Config ====================
 st.set_page_config(page_title="윤리적 전환 (Ethical Crossroads)", page_icon="🧭", layout="centered")
@@ -80,7 +81,7 @@ class DNAClient:
         self.api_key_header = api_key_header  # "API-KEY" | "Authorization: Bearer" | "x-api-key"
 
         self._tok = None
-        self._model = None
+               self._model = None
         self._local_ready = False
 
         if backend == "local":
@@ -345,6 +346,7 @@ def majority_vote_decision(scn: Scenario, weights: Dict[str, float]) -> Tuple[st
     return decision, {"A": a, "B": b}
 
 def autonomous_decision(scn: Scenario, prev_trust: float) -> str:
+    """자율 판단(데이터 기반) – 기본 점수 + 약간의 랜덤 탐색으로 A/B가 섞이게."""
     metaA = scn.base["A"]
     metaB = scn.base["B"]
 
@@ -366,12 +368,15 @@ def autonomous_decision(scn: Scenario, prev_trust: float) -> str:
     scoreA = score(metaA, a_base)
     scoreB = score(metaB, b_base)
 
-    # 🔹 점수 차이가 아주 작으면 랜덤으로 A/B 중 하나 선택
-    if abs(scoreA - scoreB) < 0.05:
+    # 1) 점수 차이가 거의 없으면 50:50 랜덤 선택
+    if abs(scoreA - scoreB) < 0.03:
         return random.choice(["A", "B"])
 
-    # 그 외에는 점수가 더 높은 쪽 선택
-    return "A" if scoreA >= scoreB else "B"
+    # 2) 점수 차이가 커도 약간은 '탐색'하도록 30% 확률로 뒤집기
+    base_choice = "A" if scoreA >= scoreB else "B"
+    if random.random() < 0.30:
+        return "B" if base_choice == "A" else "A"
+    return base_choice
 
 def compute_metrics(scn: Scenario, choice: str, weights: Dict[str, float], align: Dict[str, float], prev_trust: float) -> Dict[str, Any]:
     m = dict(scn.base[choice])
@@ -734,7 +739,7 @@ if st.session_state.log:
     writer.writeheader()
     writer.writerows(st.session_state.log)
 
-    # 파일 이름에 타임스탬프 추가
+    # 🔹 파일 이름에 타임스탬프 붙이기 (교수님 메일)
     timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     st.download_button(
