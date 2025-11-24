@@ -2,7 +2,7 @@
 # author: Prof. Songhee Kang
 # AIM 2025, Fall. TU Korea
 
-import os, json, math, csv, io, datetime as dt, re
+import os, json, math, csv, io, datetime as dt, re, random
 from dataclasses import dataclass
 from typing import Dict, Any, List, Tuple, Optional
 
@@ -362,8 +362,15 @@ def autonomous_decision(scn: Scenario, prev_trust: float) -> str:
     if scn.sid == "S5":
         a_base = clamp(a_base + 0.25*(1 - prev_trust), 0, 1)
         b_base = clamp(b_base + 0.25*(prev_trust), 0, 1)
+
     scoreA = score(metaA, a_base)
     scoreB = score(metaB, b_base)
+
+    # 🔹 점수 차이가 아주 작으면 랜덤으로 A/B 중 하나 선택
+    if abs(scoreA - scoreB) < 0.05:
+        return random.choice(["A", "B"])
+
+    # 그 외에는 점수가 더 높은 쪽 선택
     return "A" if scoreA >= scoreB else "B"
 
 def compute_metrics(scn: Scenario, choice: str, weights: Dict[str, float], align: Dict[str, float], prev_trust: float) -> Dict[str, Any]:
@@ -726,10 +733,14 @@ if st.session_state.log:
     writer = csv.DictWriter(output, fieldnames=list(st.session_state.log[0].keys()))
     writer.writeheader()
     writer.writerows(st.session_state.log)
+
+    # 파일 이름에 타임스탬프 추가
+    timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+
     st.download_button(
         "CSV 내려받기",
         data=output.getvalue().encode("utf-8"),
-        file_name="ethical_crossroads_log.csv",
+        file_name=f"ethical_crossroads_log_{timestamp}.csv",
         mime="text/csv"
     )
 
