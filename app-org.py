@@ -262,7 +262,7 @@ SCENARIOS: List[Scenario] = [
                 "regret_risk": 0.3
             },
         },
-        accept={"A": 0.45, "B": 0.70}
+        accept={"A": 0.45, "B": 0.30}
     ),
     Scenario(
         sid="S2",
