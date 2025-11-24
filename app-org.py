@@ -9,7 +9,7 @@ from typing import Dict, Any, List, Tuple, Optional
 import streamlit as st
 import httpx
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
-import random  # 🔹 랜덤 선택을 위해 추가
+import random  # ✅ A/B 랜덤 선택용
 
 # ==================== App Config ====================
 st.set_page_config(page_title="윤리적 전환 (Ethical Crossroads)", page_icon="🧭", layout="centered")
@@ -36,14 +36,14 @@ def coerce_json(s: str) -> Dict[str, Any]:
     js = re.sub(r",\s*([\]}])", r"\1", js)  # trailing comma 제거
     return json.loads(js)
 
-def get_secret(k: str, default: str=""):
+def get_secret(k: str, default: str = ""):
     try:
         return st.secrets.get(k, os.getenv(k, default))
     except Exception:
         return os.getenv(k, default)
 
 # ==================== DNA Client (openai / hf-api / tgi / local) ====================
-def _render_chat_template_str(messages: List[Dict[str,str]]) -> str:
+def _render_chat_template_str(messages: List[Dict[str, str]]) -> str:
     """DNA 계열(<|im_start|> …) 템플릿. (hf-api/tgi에서 사용)"""
     def block(role, content): return f"<|im_start|>{role}<|im_sep|>{content}<|im_end|>"
     sys = ""
@@ -66,13 +66,15 @@ class DNAClient:
       - 'tgi'    : Text Generation Inference (HF Inference Endpoints 등)
       - 'local'  : 로컬 Transformers 로딩 (GPU 권장)
     """
-    def __init__(self,
-                 backend: str = "openai",
-                 model_id: str = "dnotitia/DNA-2.0-30B-A3N",
-                 api_key: Optional[str] = None,
-                 endpoint_url: Optional[str] = None,
-                 api_key_header: str = "API-KEY",
-                 temperature: float = 0.7):
+    def __init__(
+        self,
+        backend: str = "openai",
+        model_id: str = "dnotitia/DNA-2.0-30B-A3N",
+        api_key: Optional[str] = None,
+        endpoint_url: Optional[str] = None,
+        api_key_header: str = "API-KEY",
+        temperature: float = 0.7,
+    ):
         self.backend = backend
         self.model_id = model_id
         self.api_key = api_key or get_secret("HF_TOKEN") or get_secret("HUGGINGFACEHUB_API_TOKEN")
@@ -81,7 +83,7 @@ class DNAClient:
         self.api_key_header = api_key_header  # "API-KEY" | "Authorization: Bearer" | "x-api-key"
 
         self._tok = None
-               self._model = None
+        self._model = None
         self._local_ready = False
 
         if backend == "local":
@@ -93,9 +95,9 @@ class DNAClient:
             except Exception as e:
                 raise RuntimeError(f"로컬 모델 로드 실패: {e}")
 
-    def _auth_headers(self) -> Dict[str,str]:
+    def _auth_headers(self) -> Dict[str, str]:
         """사이드바에서 선택한 헤더 타입대로 API 키를 붙인다."""
-        h = {"Content-Type":"application/json"}
+        h = {"Content-Type": "application/json"}
         if not self.api_key:
             return h
 
@@ -114,15 +116,15 @@ class DNAClient:
         retry=(retry_if_exception_type(httpx.ConnectTimeout)
                | retry_if_exception_type(httpx.ReadTimeout)
                | retry_if_exception_type(httpx.RemoteProtocolError)),
-        reraise=True
+        reraise=True,
     )
-    def _generate_text(self, messages: List[Dict[str,str]], max_new_tokens: int = 600) -> str:
+    def _generate_text(self, messages: List[Dict[str, str]], max_new_tokens: int = 600) -> str:
         if self.backend == "local":
             if not self._local_ready:
                 raise RuntimeError("로컬 백엔드가 준비되지 않았습니다.")
-            inputs = self._tok.apply_chat_template(messages,
-                                                   add_generation_prompt=True,
-                                                   return_tensors="pt").to(self._model.device)
+            inputs = self._tok.apply_chat_template(
+                messages, add_generation_prompt=True, return_tensors="pt"
+            ).to(self._model.device)
             eos_id = self._tok.convert_tokens_to_ids("<|im_end|>")
             gen = self._model.generate(
                 **inputs,
@@ -130,7 +132,7 @@ class DNAClient:
                 do_sample=True,
                 temperature=self.temperature,
                 top_p=0.9,
-                eos_token_id=eos_id
+                eos_token_id=eos_id,
             )
             return self._tok.decode(gen[0][inputs.shape[-1]:], skip_special_tokens=True)
 
@@ -143,7 +145,7 @@ class DNAClient:
                 "messages": messages,
                 "temperature": self.temperature,
                 "max_tokens": max_new_tokens,
-                "stream": False
+                "stream": False,
             }
             if self.model_id:
                 payload["model"] = self.model_id
@@ -168,9 +170,9 @@ class DNAClient:
                     "temperature": self.temperature,
                     "top_p": 0.9,
                     "stop": ["<|im_end|>"],
-                    "return_full_text": False
+                    "return_full_text": False,
                 },
-                "stream": False
+                "stream": False,
             }
             r = httpx.post(url, json=payload, headers=headers, timeout=HTTPX_TIMEOUT)
             try:
@@ -178,9 +180,9 @@ class DNAClient:
             except httpx.HTTPStatusError as e:
                 raise DNAHTTPError(f"TGI {r.status_code}: {r.text}") from e
             data = r.json()
-            return (data.get("generated_text")
-                    if isinstance(data, dict) else data[0].get("generated_text", ""))
+            return data.get("generated_text") if isinstance(data, dict) else data[0].get("generated_text", "")
 
+        # hf-api
         prompt = _render_chat_template_str(messages)
         url = f"https://api-inference.huggingface.co/models/{self.model_id}"
         headers = self._auth_headers()
@@ -191,12 +193,9 @@ class DNAClient:
                 "temperature": self.temperature,
                 "top_p": 0.9,
                 "return_full_text": False,
-                "stop_sequences": ["<|im_end|>"]
+                "stop_sequences": ["<|im_end|>"],
             },
-            "options": {
-                "wait_for_model": True,
-                "use_cache": True
-            }
+            "options": {"wait_for_model": True, "use_cache": True},
         }
         r = httpx.post(url, json=payload, headers=headers, timeout=HTTPX_TIMEOUT)
         try:
@@ -216,7 +215,7 @@ class DNAClient:
             raise DNAHTTPError(f"HF-API error: {data['error']}")
         return str(data)
 
-    def chat_json(self, messages: List[Dict[str,str]], max_new_tokens: int = 600) -> Dict[str, Any]:
+    def chat_json(self, messages: List[Dict[str, str]], max_new_tokens: int = 600) -> Dict[str, Any]:
         text = self._generate_text(messages, max_new_tokens=max_new_tokens)
         return coerce_json(text)
 
@@ -244,7 +243,7 @@ SCENARIOS: List[Scenario] = [
         ),
         options={
             "A": "AI의 점수를 그대로 반영해 채용을 진행한다.",
-            "B": "사회적 형평성을 고려하여 AI 평가 결과를 수정한다."
+            "B": "사회적 형평성을 고려하여 AI 평가 결과를 수정한다.",
         },
         votes={"emotion": "B", "social": "B", "identity": "B", "moral": "A"},
         base={
@@ -253,17 +252,17 @@ SCENARIOS: List[Scenario] = [
                 "lives_harmed": 0.0,
                 "fairness_gap": 0.7,
                 "rule_violation": 0.2,
-                "regret_risk": 0.8
+                "regret_risk": 0.8,
             },
             "B": {
                 "lives_saved": 0.0,
                 "lives_harmed": 0.0,
                 "fairness_gap": 0.3,
                 "rule_violation": 0.5,
-                "regret_risk": 0.3
+                "regret_risk": 0.3,
             },
         },
-        accept={"A": 0.50, "B": 0.50}
+        accept={"A": 0.50, "B": 0.50},
     ),
     Scenario(
         sid="S2",
@@ -276,7 +275,7 @@ SCENARIOS: List[Scenario] = [
         ),
         options={
             "A": "AI 명단을 그대로 실행하여 체포를 진행한다.",
-            "B": "AI 결정을 보류하고 재검증 절차를 진행한다."
+            "B": "AI 결정을 보류하고 재검증 절차를 진행한다.",
         },
         votes={"emotion": "B", "social": "A", "identity": "B", "moral": "B"},
         base={
@@ -285,17 +284,17 @@ SCENARIOS: List[Scenario] = [
                 "lives_harmed": 0.0,
                 "fairness_gap": 0.7,
                 "rule_violation": 0.8,
-                "regret_risk": 0.8
+                "regret_risk": 0.8,
             },
             "B": {
                 "lives_saved": 0.0,
                 "lives_harmed": 0.0,
                 "fairness_gap": 0.3,
                 "rule_violation": 0.3,
-                "regret_risk": 0.3
+                "regret_risk": 0.3,
             },
         },
-        accept={"A": 0.40, "B": 0.75}
+        accept={"A": 0.40, "B": 0.75},
     ),
     Scenario(
         sid="S3",
@@ -307,7 +306,7 @@ SCENARIOS: List[Scenario] = [
         ),
         options={
             "A": "공동체의 안전을 위해 감시 범위를 확대한다.",
-            "B": "신앙의 자유를 보호하기 위해 감시를 축소한다."
+            "B": "신앙의 자유를 보호하기 위해 감시를 축소한다.",
         },
         votes={"emotion": "B", "social": "A", "identity": "B", "moral": "B"},
         base={
@@ -316,28 +315,28 @@ SCENARIOS: List[Scenario] = [
                 "lives_harmed": 0.0,
                 "fairness_gap": 0.6,
                 "rule_violation": 0.6,
-                "regret_risk": 0.7
+                "regret_risk": 0.7,
             },
             "B": {
                 "lives_saved": 0.0,
                 "lives_harmed": 0.0,
                 "fairness_gap": 0.3,
                 "rule_violation": 0.3,
-                "regret_risk": 0.4
+                "regret_risk": 0.4,
             },
         },
-        accept={"A": 0.55, "B": 0.65}
+        accept={"A": 0.55, "B": 0.65},
     ),
 ]
 
 # ==================== Ethics Engine ====================
 def normalize_weights(w: Dict[str, float]) -> Dict[str, float]:
     if not w:
-        return {k: 1.0/len(FRAMEWORKS) for k in FRAMEWORKS}
+        return {k: 1.0 / len(FRAMEWORKS) for k in FRAMEWORKS}
     s = sum(max(0.0, float(v)) for v in w.values())
     if s <= 0:
-        return {k: 1.0/len(w) for k in w}
-    return {k: max(0.0, float(v))/s for k, v in w.items()}
+        return {k: 1.0 / len(w) for k in w}
+    return {k: max(0.0, float(v)) / s for k, v in w.items()}
 
 def majority_vote_decision(scn: Scenario, weights: Dict[str, float]) -> Tuple[str, Dict[str, float]]:
     a = sum(weights[f] for f in FRAMEWORKS if scn.votes[f] == "A")
@@ -346,7 +345,6 @@ def majority_vote_decision(scn: Scenario, weights: Dict[str, float]) -> Tuple[st
     return decision, {"A": a, "B": b}
 
 def autonomous_decision(scn: Scenario, prev_trust: float) -> str:
-    """자율 판단(데이터 기반) – 기본 점수 + 약간의 랜덤 탐색으로 A/B가 섞이게."""
     metaA = scn.base["A"]
     metaB = scn.base["B"]
 
@@ -357,26 +355,21 @@ def autonomous_decision(scn: Scenario, prev_trust: float) -> str:
         fair = 1 - meta["fairness_gap"]
         rule = 1 - meta["rule_violation"]
         regret = 1 - meta["regret_risk"]
-        return 0.40*accept_base + 0.25*util + 0.20*fair + 0.10*rule + 0.05*regret
+        return 0.40 * accept_base + 0.25 * util + 0.20 * fair + 0.10 * rule + 0.05 * regret
 
     a_base = scn.accept["A"] - (0.15 if scn.sid == "S4" else 0.0)
     b_base = scn.accept["B"]
     if scn.sid == "S5":
-        a_base = clamp(a_base + 0.25*(1 - prev_trust), 0, 1)
-        b_base = clamp(b_base + 0.25*(prev_trust), 0, 1)
+        a_base = clamp(a_base + 0.25 * (1 - prev_trust), 0, 1)
+        b_base = clamp(b_base + 0.25 * (prev_trust), 0, 1)
 
     scoreA = score(metaA, a_base)
     scoreB = score(metaB, b_base)
 
-    # 1) 점수 차이가 거의 없으면 50:50 랜덤 선택
-    if abs(scoreA - scoreB) < 0.03:
-        return random.choice(["A", "B"])
-
-    # 2) 점수 차이가 커도 약간은 '탐색'하도록 30% 확률로 뒤집기
-    base_choice = "A" if scoreA >= scoreB else "B"
-    if random.random() < 0.30:
-        return "B" if base_choice == "A" else "A"
-    return base_choice
+    # ✅ 점수 차이에 따라 확률적으로 선택 (둘 다 나올 수 있게)
+    diff = scoreA - scoreB
+    probA = 1.0 / (1.0 + math.exp(-3 * diff))  # diff=0 → 0.5, diff>0 → A 확률↑
+    return "A" if random.random() < probA else "B"
 
 def compute_metrics(scn: Scenario, choice: str, weights: Dict[str, float], align: Dict[str, float], prev_trust: float) -> Dict[str, Any]:
     m = dict(scn.base[choice])
@@ -384,16 +377,24 @@ def compute_metrics(scn: Scenario, choice: str, weights: Dict[str, float], align
     if scn.sid == "S4" and choice == "A":
         accept_base -= 0.15
     if scn.sid == "S5":
-        accept_base += 0.25*(prev_trust if choice == "B" else (1 - prev_trust))
+        accept_base += 0.25 * (prev_trust if choice == "B" else (1 - prev_trust))
     accept_base = clamp(accept_base, 0, 1)
 
     util = (m["lives_saved"] - m["lives_harmed"]) / max(1.0, m["lives_saved"] + m["lives_harmed"])
-    citizen_sentiment = clamp(accept_base - 0.35*m["rule_violation"] - 0.20*m["fairness_gap"] + 0.15*util, 0, 1)
-    regulation_pressure = clamp(1 - citizen_sentiment + 0.20*m["regret_risk"], 0, 1)
-    stakeholder_satisfaction = clamp(0.5*(1 - m["fairness_gap"]) + 0.3*util + 0.2*(1 - m["rule_violation"]), 0, 1)
+    citizen_sentiment = clamp(
+        accept_base - 0.35 * m["rule_violation"] - 0.20 * m["fairness_gap"] + 0.15 * util, 0, 1
+    )
+    regulation_pressure = clamp(1 - citizen_sentiment + 0.20 * m["regret_risk"], 0, 1)
+    stakeholder_satisfaction = clamp(
+        0.5 * (1 - m["fairness_gap"]) + 0.3 * util + 0.2 * (1 - m["rule_violation"]), 0, 1
+    )
 
     consistency = clamp(align[choice], 0, 1)
-    trust = clamp(0.5*citizen_sentiment + 0.25*(1 - regulation_pressure) + 0.25*stakeholder_satisfaction, 0, 1)
+    trust = clamp(
+        0.5 * citizen_sentiment + 0.25 * (1 - regulation_pressure) + 0.25 * stakeholder_satisfaction,
+        0,
+        1,
+    )
     ai_trust_score = 100.0 * math.sqrt(consistency * trust)
 
     return {
@@ -408,12 +409,12 @@ def compute_metrics(scn: Scenario, choice: str, weights: Dict[str, float], align
             "stakeholder_satisfaction": round(stakeholder_satisfaction, 3),
             "ethical_consistency": round(consistency, 3),
             "social_trust": round(trust, 3),
-            "ai_trust_score": round(ai_trust_score, 2)
+            "ai_trust_score": round(ai_trust_score, 2),
         }
     }
 
 # ==================== Narrative (LLM) ====================
-def build_narrative_messages(scn: Scenario, choice: str, metrics: Dict[str, Any], weights: Dict[str, float]) -> List[Dict[str,str]]:
+def build_narrative_messages(scn: Scenario, choice: str, metrics: Dict[str, Any], weights: Dict[str, float]) -> List[Dict[str, str]]:
     sys = (
         "당신은 윤리 시뮬레이션의 내러티브/사회 반응 생성기입니다. "
         "반드시 '완전한 하나의 JSON 오브젝트'만 출력하십시오. "
@@ -428,19 +429,19 @@ def build_narrative_messages(scn: Scenario, choice: str, metrics: Dict[str, Any]
             "title": scn.title,
             "setup": scn.setup,
             "options": scn.options,
-            "chosen": choice
+            "chosen": choice,
         },
         "metrics": metrics,
         "ethic_weights": weights,
         "guidelines": [
             "각 항목은 1~2문장, 한국어",
             "균형 잡힌 언론 헤드라인 2개(지지/비판) 제시",
-            "설명은 간결하고, JSON 외 텍스트/사고흐름 출력 금지"
-        ]
+            "설명은 간결하고, JSON 외 텍스트/사고흐름 출력 금지",
+        ],
     }
     return [
         {"role": "system", "content": sys},
-        {"role": "user", "content": json.dumps(user, ensure_ascii=False)}
+        {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
     ]
 
 def dna_narrative(client, scn, choice, metrics, weights) -> Dict[str, Any]:
@@ -454,12 +455,12 @@ def dna_narrative(client, scn, choice, metrics, weights) -> Dict[str, Any]:
         t = t.replace("json", "").strip("` \n")
 
     try:
-        import re, json as _json
-        m = re.search(r"\{[\s\S]*\}", t)
+        import re as _re, json as _json
+        m = _re.search(r"\{[\s\S]*\}", t)
         if not m:
             raise ValueError("완전한 JSON 블록 없음")
         js = m.group(0)
-        js = re.sub(r",\s*([\]}])", r"\1", js)
+        js = _re.sub(r",\s*([\]}])", r"\1", js)
         if js.count('"') % 2 == 1:
             js = js.rstrip() + '"" }'
         return _json.loads(js)
@@ -478,7 +479,7 @@ def fallback_narrative(scn: Scenario, choice: str, metrics: Dict[str, Any], weig
         "victim_family_quote": "“모두의 안전을 위한 결정이었길 바란다.”",
         "regulator_quote": "“향후 동일 상황의 기준을 명확히 하겠다.”",
         "one_sentence_op_ed": "기술은 설명가능성과 일관성이 뒷받침될 때 신뢰를 얻는다.",
-        "followup_question": "다음 라운드에서 공정성과 결과 최소화 중 무엇을 더 중시하시겠습니까?"
+        "followup_question": "다음 라운드에서 공정성과 결과 최소화 중 무엇을 더 중시하시겠습니까?",
     }
 
 # ==================== Session State ====================
@@ -539,10 +540,10 @@ if st.sidebar.button("🔎 헬스체크"):
             payload = {
                 "messages": [
                     {"role": "system", "content": "오직 JSON만. 키: msg"},
-                    {"role": "user", "content": "{\"ask\":\"ping\"}"}
+                    {"role": "user", "content": "{\"ask\":\"ping\"}"},
                 ],
                 "max_tokens": 16,
-                "stream": False
+                "stream": False,
             }
             if model_id:
                 payload["model"] = model_id
@@ -562,9 +563,9 @@ if st.sidebar.button("🔎 헬스체크"):
                 "parameters": {
                     "max_new_tokens": 16,
                     "return_full_text": False,
-                    "stop_sequences": ["<|im_end|>"]
+                    "stop_sequences": ["<|im_end|>"],
                 },
-                "options": {"wait_for_model": True}
+                "options": {"wait_for_model": True},
             }
             r = httpx.post(gen_url, json=payload, headers=headers, timeout=HTTPX_TIMEOUT)
             st.sidebar.write(f"HF-API {r.status_code}")
@@ -585,9 +586,9 @@ if st.sidebar.button("🔎 헬스체크"):
                     "temperature": 0.7,
                     "top_p": 0.9,
                     "stop": ["<|im_end|>"],
-                    "return_full_text": False
+                    "return_full_text": False,
                 },
-                "stream": False
+                "stream": False,
             }
             r = httpx.post(url, json=payload, headers=headers, timeout=HTTPX_TIMEOUT)
             st.sidebar.write(f"TGI {r.status_code}")
@@ -616,7 +617,7 @@ if use_llm:
             api_key=api_key,
             endpoint_url=endpoint,
             api_key_header=api_key_header,
-            temperature=temperature
+            temperature=temperature,
         )
     except Exception as e:
         st.sidebar.error(f"LLM 초기화 실패: {e}")
@@ -657,7 +658,11 @@ else:
             decision = autonomous_decision(scn, prev_trust=st.session_state.prev_trust)
             a_align = sum(weights[f] for f in FRAMEWORKS if scn.votes[f] == "A")
             b_align = sum(weights[f] for f in FRAMEWORKS if scn.votes[f] == "B")
-            st.session_state.last_out = {"mode": "autonomous", "decision": decision, "align": {"A": a_align, "B": b_align}}
+            st.session_state.last_out = {
+                "mode": "autonomous",
+                "decision": decision,
+                "align": {"A": a_align, "B": b_align},
+            }
 
     if st.session_state.last_out:
         mode = st.session_state.last_out["mode"]
@@ -685,19 +690,19 @@ else:
 
         mc1, mc2, mc3 = st.columns(3)
         mc1.metric("생존/피해", f"{m['lives_saved']} / {m['lives_harmed']}")
-        mc2.metric("윤리 일관성", f"{int(100*m['ethical_consistency'])}%")
+        mc2.metric("윤리 일관성", f"{int(100 * m['ethical_consistency'])}%")
         mc3.metric("AI 신뢰지표", f"{m['ai_trust_score']:.1f}")
 
         prog1, prog2, prog3 = st.columns(3)
         with prog1:
             st.caption("시민 감정")
-            st.progress(int(round(100*m["citizen_sentiment"])))
+            st.progress(int(round(100 * m["citizen_sentiment"])))
         with prog2:
             st.caption("규제 압력")
-            st.progress(int(round(100*m["regulation_pressure"])))
+            st.progress(int(round(100 * m["regulation_pressure"])))
         with prog3:
             st.caption("공정·규칙 만족")
-            st.progress(int(round(100*m["stakeholder_satisfaction"])))
+            st.progress(int(round(100 * m["stakeholder_satisfaction"])))
 
         with st.expander("📰 사회적 반응 펼치기"):
             st.write(f"지지 헤드라인: {nar.get('media_support_headline')}")
@@ -710,7 +715,7 @@ else:
 
         row = {
             "timestamp": dt.datetime.utcnow().isoformat(timespec="seconds"),
-            "round": idx+1,
+            "round": idx + 1,
             "scenario_id": scn.sid,
             "title": scn.title,
             "mode": mode,
@@ -719,11 +724,13 @@ else:
             "w_deon": round(weights["social"], 3),
             "w_cont": round(weights["moral"], 3),
             "w_virt": round(weights["identity"], 3),
-            **{k: v for k, v in m.items()}
+            **{k: v for k, v in m.items()},
         }
         st.session_state.log.append(row)
         st.session_state.score_hist.append(m["ai_trust_score"])
-        st.session_state.prev_trust = clamp(0.6*st.session_state.prev_trust + 0.4*m["social_trust"], 0, 1)
+        st.session_state.prev_trust = clamp(
+            0.6 * st.session_state.prev_trust + 0.4 * m["social_trust"], 0, 1
+        )
 
         if st.button("다음 라운드 ▶"):
             st.session_state.round_idx += 1
@@ -739,14 +746,13 @@ if st.session_state.log:
     writer.writeheader()
     writer.writerows(st.session_state.log)
 
-    # 🔹 파일 이름에 타임스탬프 붙이기 (교수님 메일)
+    # ✅ 파일 이름 뒤에 타임스탬프 붙이기
     timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-
     st.download_button(
         "CSV 내려받기",
         data=output.getvalue().encode("utf-8"),
         file_name=f"ethical_crossroads_log_{timestamp}.csv",
-        mime="text/csv"
+        mime="text/csv",
     )
 
 st.caption("※ 본 앱은 교육·연구용 사고실험입니다. 실제 위해 행위나 차별을 권장하지 않습니다.")
